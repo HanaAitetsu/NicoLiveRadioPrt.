@@ -2,120 +2,85 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>野良生放送ラジオ（試作版）</title>
+    <title>YouTube LIVE ラジオ（試作版）</title>
     <style>
         body {
-            background-color: #222;
+            background-color: #1a1a1a;
             color: #fff;
             font-family: sans-serif;
             text-align: center;
             padding-top: 50px;
         }
         .radio-box {
-            border: 4px solid #555;
-            border-radius: 10px;
+            border: 4px solid #cc0000;
+            border-radius: 15px;
             padding: 30px;
             display: inline-block;
-            background-color: #333;
-            min-width: 450px;
+            background-color: #2b2b2b;
+            min-width: 480px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .dial-container {
+            margin: 20px 0;
         }
         button {
             padding: 12px 24px;
-            font-size: 18px;
-            background-color: #ffb703;
+            font-size: 16px;
+            background-color: #cc0000;
+            color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 25px;
             cursor: pointer;
             font-weight: bold;
-            box-shadow: 0 4px #fb8500;
+            margin: 5px;
+            transition: all 0.2s;
         }
-        button:active {
-            transform: translateY(4px);
-            box-shadow: none;
-        }
+        button:hover { background-color: #ff0000; }
+        button:active { transform: scale(0.95); }
         #player-container { margin-top: 25px; }
         #info { margin-top: 15px; font-size: 16px; color: #fff; font-weight: bold; }
-        #sub-info { font-size: 12px; color: #aaa; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="radio-box">
-    <h2>📻 ニコ生・野良ザッピングラジオ</h2>
-    <p style="color: #ccc; font-size: 14px;">電源を入れてチューニングを合わせる感覚の試作機</p>
-    <button id="next-btn">📻 チャンネルをひねる（次の番組）</button>
+    <h2>📻 YouTube LIVE 専用ラジオ（試作機）</h2>
+    <p style="color: #aaa; font-size: 14px;">ジャンル（周波数）を選んでチューニングしてください</p>
     
-    <div id="info">電波を受信中...</div>
-    <div id="sub-info"></div>
+    <div class="dial-container">
+        <button onclick="tuneIn('ニュース')">📰 ニュース</button>
+        <button onclick="tuneIn('作業用BGM')">☕ BGM</button>
+        <button onclick="tuneIn('ライブカメラ')">📷 ライブカメラ</button>
+        <button onclick="tuneIn('ゲーム配信')">🎮 ゲーム</button>
+    </div>
+    
+    <div id="info">周波数を合わせてください...</div>
     <div id="player-container"></div>
 </div>
 
 <script>
-async function tuneInRadio() {
+function tuneIn(keyword) {
     const infoDiv = document.getElementById('info');
-    const subInfoDiv = document.getElementById('sub-info');
     const container = document.getElementById('player-container');
     
-    infoDiv.innerText = "番組を探索中...";
-    subInfoDiv.innerText = "";
+    infoDiv.innerText = `「${keyword}」の電波を受信中...`;
     container.innerHTML = ""; 
 
-    // 仕様書(v2)に基づいたクエリを構築
-    // ターゲットは「tags（タグ）」、検索ワードは「雑談」
-    // フィルタ：liveStatus が「onair（放送中）」のもの
-    const keyword = encodeURIComponent("雑談");
-    const targetFields = "contentId,title,userId,communityName";
-    const targetFilters = encodeURIComponent("filters[liveStatus][0]=onair");
-    
-    const targetUrl = `https://snapshot.search.nicovideo.jp/api/v2/live/contents/search?q=${keyword}&targets=tags&fields=${targetFields}&${targetFilters}&_sort=-viewCounter&_limit=40`;
+    // YouTubeの検索パラメータ（sp=EgJAAQ%253D%253D は「ライブ配信中のみ」に絞り込むフィルター）
+    const encodedKeyword = encodeURIComponent(keyword);
+    const searchUrl = `https://www.youtube.com/embed?listType=search&list=${encodedKeyword}&sp=EgJAAQ%253D%253D&autoplay=1`;
 
-    // GitHub Pages(HTTPS)環境からのCORS制限を突破するため、高安定なプロキシを通す
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-
-    try {
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error("ネットワークエラー");
-        
-        const wrapperData = await response.json();
-        const result = JSON.parse(wrapperData.contents);
-
-        if (result.data && result.data.length > 0) {
-            // 現在オンエア中の番組からランダムに1つ選ぶ（ザッピング感の再現）
-            const randomIndex = Math.floor(Math.random() * result.data.length);
-            const program = result.data[randomIndex];
-            
-            infoDiv.innerText = `♪ ${program.title}`;
-            subInfoDiv.innerText = `放送コミュニティ: ${program.communityName || '個人配信'}`;
-            
-            // ニコ生公式の埋め込み用プレイヤーを生成
-            // ※注意: ブラウザのセキュリティ上、初回の自動再生時はミュートされることがあります。
-            // プレイヤー内の音量アイコンでミュートを解除してください。
-            container.innerHTML = `
-                <iframe src="https://live.nicovideo.jp/embed/${program.contentId}?autoplay=1&mute=0" 
-                        width="450" 
-                        height="280" 
-                        style="border:4px solid #222; background:#000;" 
-                        allow="autoplay; encrypted-media">
-                </iframe>`;
-        } else {
-            infoDiv.innerText = "❌ 現在放送中の番組が見つかりませんでした。";
-            subInfoDiv.innerText = "タイミングを変えてもう一度試してください。";
-        }
-    } catch (error) {
-        console.error(error);
-        infoDiv.innerText = "⚠️ 電波障害（通信エラー）";
-        subInfoDiv.innerText = "CORSまたはプロキシの制限により取得に失敗しました。もう一度ボタンを押してください。";
-    }
+    // YouTubeの埋め込みプレイヤーを生成
+    // ※YouTubeの仕様上、検索結果の一番上にヒットした「現在ライブ中」の動画が自動で流れます
+    container.innerHTML = `
+        <iframe src="${searchUrl}" 
+                width="480" 
+                height="270" 
+                style="border:4px solid #111; background:#000;" 
+                allow="autoplay; encrypted-media; picture-in-picture" 
+                allowfullscreen>
+        </iframe>`;
 }
-
-// 起動時（ページ読み込み時）に自動実行
-window.addEventListener('load', () => {
-    // 1秒待ってから最初の検索を開始
-    setTimeout(tuneInRadio, 1000);
-});
-
-// ボタンクリックで次の番組へザッピング
-document.getElementById('next-btn').addEventListener('click', tuneInRadio);
 </script>
 
 </body>
